@@ -32,7 +32,7 @@ export interface Employee {
   department: Department;
 }
 
-// Map: DateString (YYYY-MM-DD) -> EmployeeID -> ShiftCode (Format: "CODE" or "CODE:OT_HOURS")
+// Map: DateString (YYYY-MM-DD) -> EmployeeID -> ShiftCode (Format: "CODE" or "CODE:OT_HOURS" or "CODE:OT_HOURS:L")
 export type DailySchedule = Record<string, ShiftCode>;
 export type StoreSchedule = Record<string, DailySchedule>; // Date -> Employee -> Shift
 
@@ -45,12 +45,13 @@ export interface DateRange {
   end: Date;
 }
 
-// Helper to parse "CODE:OT"
+// Helper to parse "CODE:OT:L"
 export const parseShiftCode = (value: string | undefined) => {
-  if (!value) return { code: null, ot: 0 };
+  if (!value) return { code: null, ot: 0, isLesson: false };
   const parts = value.split(':');
   return { 
     code: parts[0], 
-    ot: parts.length > 1 ? parseInt(parts[1], 10) : 0 
+    ot: parts.length > 1 ? parseInt(parts[1], 10) : 0,
+    isLesson: parts.length > 2 ? parts[2] === 'L' : false
   };
 };

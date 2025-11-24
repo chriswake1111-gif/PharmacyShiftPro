@@ -688,18 +688,17 @@ const App: React.FC = () => {
                      <span className="text-[10px] font-medium text-gray-600">{def.label}</span>
                    </div>
                  ))}
+                 
+                 {/* Moved Restore Default Button */}
+                 <button 
+                  type="button"
+                  onClick={handleClearRangeRequest}
+                  className="px-2 py-0.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-full border border-red-200 text-[10px] font-bold transition-colors flex items-center gap-1 shadow-sm cursor-pointer ml-1"
+                  title="回復此區間為預設班別"
+                 >
+                   <RotateCcw size={12} /> 回復預設
+                 </button>
               </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-               <button 
-                type="button"
-                onClick={handleClearRangeRequest}
-                className="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-md border border-red-200 text-xs font-bold transition-colors flex items-center gap-1 shadow-sm cursor-pointer"
-                title="回復此區間為預設班別"
-               >
-                 <RotateCcw size={14} /> 回復預設
-               </button>
             </div>
           </div>
         )}
@@ -853,17 +852,7 @@ const App: React.FC = () => {
             </div>
           )}
 
-           {/* StatPanel inside Maximized View */}
-           {isMaximized && displayDays.length > 0 && (
-              <div className="border-t border-gray-200 p-2 bg-gray-50 shrink-0 overflow-x-auto">
-                 <StatPanel 
-                   employees={sortedEmployees} 
-                   schedule={storeSchedule} 
-                   dateRange={dateRange}
-                   shiftDefinitions={shiftDefs}
-                 />
-              </div>
-           )}
+           {/* StatPanel REMOVED in Maximize Mode to maximize grid space */}
         </div>
 
         {/* Shift Selector - Increased Z-Index for Maximize Mode */}

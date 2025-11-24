@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { format, eachDayOfInterval, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 import { 
@@ -19,7 +19,8 @@ import {
   FileJson,
   MonitorDown,
   Maximize2,
-  Minimize2
+  Minimize2,
+  GraduationCap
 } from 'lucide-react';
 
 import { ShiftCode, Employee, StoreSchedule, ShiftDefinition, parseShiftCode, BuiltInShifts } from './types';
@@ -43,6 +44,97 @@ interface PopupPosition {
   left?: number;
   right?: number;
 }
+
+// Helper for Positioning (Moved outside component for stability)
+const calculatePosition = (e: React.MouseEvent): PopupPosition => {
+  const x = e.clientX;
+  const y = e.clientY;
+  const windowWidth = window.innerWidth;
+  const windowHeight = window.innerHeight;
+
+  // Decide vertical placement (Above or Below cursor)
+  // If click is in bottom half (50%) of screen, show above.
+  const showAbove = y > windowHeight / 2;
+  
+  // Decide horizontal placement (Left or Right of cursor)
+  // If click is in right half (50%) of screen, show left.
+  const showLeft = x > windowWidth / 2;
+
+  const offset = 12; // offset from cursor to prevent overlap
+
+  return {
+    top: showAbove ? undefined : y + offset,
+    bottom: showAbove ? windowHeight - y + offset : undefined,
+    left: showLeft ? undefined : x + offset,
+    right: showLeft ? windowWidth - x + offset : undefined
+  };
+};
+
+// Optimized Cell Component
+const ShiftCell = React.memo(({ 
+  empId, 
+  dateStr, 
+  isWeekend, 
+  rawValue, 
+  originalValue, 
+  shiftDefs, 
+  onClick, 
+  onDoubleClick 
+}: {
+  empId: string;
+  dateStr: string;
+  isWeekend: boolean;
+  rawValue: string | undefined;
+  originalValue: string | undefined;
+  shiftDefs: Record<string, ShiftDefinition>;
+  onClick: (e: React.MouseEvent, empId: string, dateStr: string) => void;
+  onDoubleClick: (e: React.MouseEvent, empId: string, dateStr: string, rawValue: string) => void;
+}) => {
+  const isDirty = rawValue !== originalValue;
+  const { code, ot, isLesson } = parseShiftCode(rawValue);
+  const shiftDef = code ? shiftDefs[code] : null;
+
+  return (
+    <td 
+      className={`relative border-b border-r border-gray-100 p-0.5 text-center h-10
+        ${isWeekend ? 'bg-orange-50/10' : ''}
+      `}
+    >
+      <button
+        onClick={(e) => onClick(e, empId, dateStr)}
+        onDoubleClick={(e) => rawValue && onDoubleClick(e, empId, dateStr, rawValue)}
+        className={`w-full h-full rounded flex items-center justify-center transition-all text-xs font-bold shadow-sm select-none relative
+          ${shiftDef 
+            ? `${shiftDef.color} hover:brightness-95` 
+            : 'text-transparent hover:bg-gray-100 hover:text-gray-300'
+          }
+          ${isDirty ? 'ring-2 ring-yellow-400 border-transparent' : ''}
+        `}
+      >
+        {shiftDef ? (
+          <div className="flex items-center gap-0.5">
+             <span>{shiftDef.shortLabel}</span>
+             {code === BuiltInShifts.ANNUAL ? (
+                (ot > 0 && ot !== shiftDef.hours) && <span className="text-[9px] bg-white/50 px-0.5 rounded text-gray-800">({ot})</span>
+             ) : (
+               <>
+                 {ot > 0 && <span className="text-[9px] bg-white/50 px-0.5 rounded text-gray-800">+{ot}</span>}
+                 {isLesson && <span className="text-[9px] bg-indigo-100 text-indigo-700 px-0.5 rounded border border-indigo-200">/上</span>}
+               </>
+             )}
+          </div>
+        ) : '+'}
+        
+        {isDirty && (
+          <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
+          </span>
+        )}
+      </button>
+    </td>
+  );
+});
 
 const App: React.FC = () => {
   // --- State ---
@@ -119,14 +211,14 @@ const App: React.FC = () => {
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isMaximized, setIsMaximized] = useState(false); // New state for maximize mode
+  const [isMaximized, setIsMaximized] = useState(false);
   
   // PWA Install Prompt State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   
   // UI State for interactions with Position
   const [selectedCell, setSelectedCell] = useState<{empId: string, dateStr: string, position: PopupPosition} | null>(null);
-  const [selectedOvertimeCell, setSelectedOvertimeCell] = useState<{empId: string, dateStr: string, baseCode: string, position: PopupPosition} | null>(null);
+  const [selectedOvertimeCell, setSelectedOvertimeCell] = useState<{empId: string, dateStr: string, baseCode: string, currentOt: number, isLesson: boolean, position: PopupPosition} | null>(null);
   const [selectedAnnualCell, setSelectedAnnualCell] = useState<{empId: string, dateStr: string, position: PopupPosition} | null>(null);
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -225,31 +317,6 @@ const App: React.FC = () => {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  // --- Helper for Positioning ---
-  const calculatePosition = (e: React.MouseEvent): PopupPosition => {
-    const x = e.clientX;
-    const y = e.clientY;
-    const windowWidth = window.innerWidth;
-    const windowHeight = window.innerHeight;
-
-    // Decide vertical placement (Above or Below cursor)
-    // If click is in bottom half (50%) of screen, show above.
-    const showAbove = y > windowHeight / 2;
-    
-    // Decide horizontal placement (Left or Right of cursor)
-    // If click is in right half (50%) of screen, show left.
-    const showLeft = x > windowWidth / 2;
-
-    const offset = 12; // offset from cursor to prevent overlap
-
-    return {
-      top: showAbove ? undefined : y + offset,
-      bottom: showAbove ? windowHeight - y + offset : undefined,
-      left: showLeft ? undefined : x + offset,
-      right: showLeft ? windowWidth - x + offset : undefined
-    };
-  };
-
   // --- Handlers ---
 
   const handleInstallClick = () => {
@@ -343,7 +410,7 @@ const App: React.FC = () => {
     }));
   };
 
-  const updateSchedule = (empId: string, dateStr: string, code: ShiftCode) => {
+  const updateSchedule = useCallback((empId: string, dateStr: string, code: ShiftCode) => {
     setAllData(prev => {
       const currentStoreData = prev[selectedStore] || {};
       const dayData = currentStoreData[dateStr] || {};
@@ -360,21 +427,31 @@ const App: React.FC = () => {
       };
     });
     setSelectedCell(null);
-  };
+  }, [selectedStore]);
 
-  const handleAddOvertime = (empId: string, dateStr: string, baseCode: string, otHours: number) => {
-    const newCode = `${baseCode}:${otHours}`;
+  // Combined handler for Overtime and Lesson updates
+  const handleUpdateShiftAttributes = useCallback((empId: string, dateStr: string, baseCode: string, otHours: number, isLesson: boolean) => {
+    let newCode = baseCode;
+    // Format: CODE or CODE:OT or CODE:OT:L
+    if (otHours > 0 || isLesson) {
+      newCode = `${baseCode}:${otHours}`;
+      if (isLesson) {
+        newCode += `:L`;
+      }
+    }
     updateSchedule(empId, dateStr, newCode);
-    setSelectedOvertimeCell(null);
-  };
+    
+    // Explicitly keep local state updated for seamless toggling
+    setSelectedOvertimeCell(prev => prev ? { ...prev, currentOt: otHours, isLesson } : null);
+  }, [updateSchedule]);
 
-  const handleSetAnnualHours = (empId: string, dateStr: string, hours: number) => {
+  const handleSetAnnualHours = useCallback((empId: string, dateStr: string, hours: number) => {
     const newCode = `${BuiltInShifts.ANNUAL}:${hours}`;
     updateSchedule(empId, dateStr, newCode);
     setSelectedAnnualCell(null);
-  };
+  }, [updateSchedule]);
 
-  const handleRevertCell = (empId: string, dateStr: string) => {
+  const handleRevertCell = useCallback((empId: string, dateStr: string) => {
     const originalValue = savedData[selectedStore]?.[dateStr]?.[empId];
 
     setAllData(prev => {
@@ -396,11 +473,11 @@ const App: React.FC = () => {
       };
     });
     setSelectedCell(null);
-  };
+  }, [savedData, selectedStore]);
 
-  const handleCellDoubleClick = (e: React.MouseEvent, empId: string, dateStr: string, rawCode: string) => {
+  const handleCellDoubleClick = useCallback((e: React.MouseEvent, empId: string, dateStr: string, rawCode: string) => {
     if (!rawCode) return;
-    const { code } = parseShiftCode(rawCode);
+    const { code, ot, isLesson } = parseShiftCode(rawCode);
     
     if (!code) return;
 
@@ -412,14 +489,13 @@ const App: React.FC = () => {
     }
 
     // Check if allowed shift types for overtime
-    // Allow any shift that has hours > 0 and is not OFF
     const def = shiftDefs[code];
     if (def && def.hours > 0 && code !== BuiltInShifts.OFF) {
-       setSelectedOvertimeCell({ empId, dateStr, baseCode: code, position });
+       setSelectedOvertimeCell({ empId, dateStr, baseCode: code, currentOt: ot, isLesson, position });
     }
-  };
+  }, [shiftDefs]);
 
-  const onCellClick = (e: React.MouseEvent, empId: string, dateStr: string) => {
+  const onCellClick = useCallback((e: React.MouseEvent, empId: string, dateStr: string) => {
     e.preventDefault(); 
     // Capture position synchronously
     const position = calculatePosition(e);
@@ -429,9 +505,9 @@ const App: React.FC = () => {
       setSelectedCell({ empId, dateStr, position });
       clickTimeoutRef.current = null;
     }, 250); 
-  };
+  }, []);
 
-  const onCellDoubleClick = (e: React.MouseEvent, empId: string, dateStr: string, rawValue: string) => {
+  const onCellDoubleClick = useCallback((e: React.MouseEvent, empId: string, dateStr: string, rawValue: string) => {
     e.preventDefault();
     if (clickTimeoutRef.current) {
       clearTimeout(clickTimeoutRef.current);
@@ -440,7 +516,7 @@ const App: React.FC = () => {
     if (rawValue) {
       handleCellDoubleClick(e, empId, dateStr, rawValue);
     }
-  };
+  }, [handleCellDoubleClick]);
 
   const handleClearRangeRequest = () => {
     if (displayDays.length === 0) {
@@ -689,18 +765,17 @@ const App: React.FC = () => {
                      <span className="text-[10px] font-medium text-gray-600">{def.label}</span>
                    </div>
                  ))}
-              </div>
-            </div>
 
-            <div className="flex items-center gap-2">
-               <button 
-                type="button"
-                onClick={handleClearRangeRequest}
-                className="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-md border border-red-200 text-xs font-bold transition-colors flex items-center gap-1 shadow-sm cursor-pointer"
-                title="回復此區間為預設班別"
-               >
-                 <RotateCcw size={14} /> 回復預設
-               </button>
+                 {/* Restore Button Moved Here */}
+                 <button 
+                  type="button"
+                  onClick={handleClearRangeRequest}
+                  className="px-2 py-0.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-full border border-red-200 text-[10px] font-bold transition-colors flex items-center gap-1 shadow-sm cursor-pointer ml-1"
+                  title="回復此區間為預設班別"
+                 >
+                   <RotateCcw size={12} /> 回復預設
+                 </button>
+              </div>
             </div>
           </div>
         )}
@@ -803,48 +878,19 @@ const App: React.FC = () => {
                       {sortedEmployees.map((emp) => {
                         const rawValue = storeSchedule[dayInfo.dateStr]?.[emp.id];
                         const originalValue = baselineSchedule[dayInfo.dateStr]?.[emp.id];
-                        const isDirty = rawValue !== originalValue;
-
-                        const { code, ot } = parseShiftCode(rawValue);
-                        const shiftDef = code ? shiftDefs[code] : null;
-
+                        
                         return (
-                          <td 
-                            key={emp.id} 
-                            className={`relative border-b border-r border-gray-100 p-0.5 text-center h-10
-                              ${dayInfo.isWeekend ? 'bg-orange-50/10' : ''}
-                            `}
-                          >
-                            <button
-                              onClick={(e) => onCellClick(e, emp.id, dayInfo.dateStr)}
-                              onDoubleClick={(e) => rawValue && onCellDoubleClick(e, emp.id, dayInfo.dateStr, rawValue)}
-                              className={`w-full h-full rounded flex items-center justify-center transition-all text-xs font-bold shadow-sm select-none relative
-                                ${shiftDef 
-                                  ? `${shiftDef.color} hover:brightness-95` 
-                                  : 'text-transparent hover:bg-gray-100 hover:text-gray-300'
-                                }
-                                ${isDirty ? 'ring-2 ring-yellow-400 border-transparent' : ''}
-                              `}
-                            >
-                              {shiftDef ? (
-                                <div className="flex items-center gap-0.5">
-                                   <span>{shiftDef.shortLabel}</span>
-                                   {code === BuiltInShifts.ANNUAL ? (
-                                      (ot > 0 && ot !== shiftDef.hours) && <span className="text-[9px] bg-white/50 px-0.5 rounded text-gray-800">({ot})</span>
-                                   ) : (
-                                      ot > 0 && <span className="text-[9px] bg-white/50 px-0.5 rounded text-gray-800">+{ot}</span>
-                                   )}
-                                </div>
-                              ) : '+'}
-                              
-                              {isDirty && (
-                                <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
-                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
-                                </span>
-                              )}
-                            </button>
-                          </td>
+                          <ShiftCell
+                            key={emp.id}
+                            empId={emp.id}
+                            dateStr={dayInfo.dateStr}
+                            isWeekend={dayInfo.isWeekend}
+                            rawValue={rawValue}
+                            originalValue={originalValue}
+                            shiftDefs={shiftDefs}
+                            onClick={onCellClick}
+                            onDoubleClick={onCellDoubleClick}
+                          />
                         );
                       })}
                     </tr>
@@ -854,17 +900,7 @@ const App: React.FC = () => {
             </div>
           )}
 
-           {/* StatPanel inside Maximized View */}
-           {isMaximized && displayDays.length > 0 && (
-              <div className="border-t border-gray-200 p-2 bg-gray-50 shrink-0 overflow-x-auto">
-                 <StatPanel 
-                   employees={sortedEmployees} 
-                   schedule={storeSchedule} 
-                   dateRange={dateRange}
-                   shiftDefinitions={shiftDefs}
-                 />
-              </div>
-           )}
+           {/* StatPanel REMOVED in Maximize Mode to maximize grid space */}
         </div>
 
         {/* Shift Selector - Increased Z-Index for Maximize Mode */}
@@ -920,7 +956,7 @@ const App: React.FC = () => {
           </>
         )}
 
-        {/* Overtime Selector - Increased Z-Index */}
+        {/* Overtime & Lesson Selector - Increased Z-Index */}
         {selectedOvertimeCell && (
           <>
              <div 
@@ -939,32 +975,88 @@ const App: React.FC = () => {
                <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-100">
                 <div className="flex items-center gap-2">
                    <Clock size={18} className="text-brand-600" />
-                   <span className="text-sm font-bold text-gray-700">設定加班時數</span>
+                   <span className="text-sm font-bold text-gray-700">設定加班 / 上課</span>
                 </div>
                 <button onClick={() => setSelectedOvertimeCell(null)} className="text-gray-400 hover:text-gray-600">
                   <XCircle size={18} />
                 </button>
               </div>
               <p className="text-xs text-gray-500 mb-3 text-center">
-                 目前班別: <span className="font-bold text-gray-800">{shiftDefs[selectedOvertimeCell.baseCode]?.label}</span>
+                 班別: <span className="font-bold text-gray-800">{shiftDefs[selectedOvertimeCell.baseCode]?.label}</span>
               </p>
-              <div className="grid grid-cols-2 gap-3">
+              
+              {/* OT Grid */}
+              <div className="grid grid-cols-2 gap-3 mb-3">
                  {[1, 2, 3, 4].map(hour => (
                     <button
                        key={hour}
-                       onClick={() => handleAddOvertime(selectedOvertimeCell.empId, selectedOvertimeCell.dateStr, selectedOvertimeCell.baseCode, hour)}
-                       className="flex flex-col items-center justify-center py-3 rounded-lg bg-red-50 text-red-700 border border-red-100 hover:bg-red-100 hover:shadow-sm transition-all font-bold"
+                       onClick={() => {
+                          if (selectedOvertimeCell) {
+                             handleUpdateShiftAttributes(
+                                selectedOvertimeCell.empId, 
+                                selectedOvertimeCell.dateStr, 
+                                selectedOvertimeCell.baseCode, 
+                                hour, 
+                                selectedOvertimeCell.isLesson
+                             );
+                             // Explicitly close popup after selecting OT hour
+                             setSelectedOvertimeCell(null);
+                          }
+                       }}
+                       className={`flex flex-col items-center justify-center py-2 rounded-lg border transition-all font-bold
+                          ${selectedOvertimeCell.currentOt === hour 
+                             ? 'bg-red-600 text-white border-red-700 shadow-md ring-2 ring-red-200' 
+                             : 'bg-red-50 text-red-700 border-red-100 hover:bg-red-100 hover:shadow-sm'
+                          }
+                       `}
                     >
                        <span className="text-lg">+{hour}</span>
                        <span className="text-[10px] opacity-70">小時</span>
                     </button>
                  ))}
               </div>
+              
+              {/* Lesson Toggle */}
               <button
-                 onClick={() => handleAddOvertime(selectedOvertimeCell.empId, selectedOvertimeCell.dateStr, selectedOvertimeCell.baseCode, 0)}
-                 className="w-full mt-3 py-2 text-xs text-gray-500 hover:bg-gray-50 rounded border border-gray-200"
+                 onClick={() => {
+                     if (selectedOvertimeCell) {
+                        const newLessonState = !selectedOvertimeCell.isLesson;
+                        handleUpdateShiftAttributes(
+                            selectedOvertimeCell.empId, 
+                            selectedOvertimeCell.dateStr, 
+                            selectedOvertimeCell.baseCode, 
+                            selectedOvertimeCell.currentOt, 
+                            newLessonState
+                        );
+                     }
+                 }}
+                 className={`w-full py-3 mb-3 rounded-lg border flex items-center justify-center gap-2 font-bold transition-all
+                    ${selectedOvertimeCell.isLesson
+                       ? 'bg-indigo-600 text-white border-indigo-700 shadow-md ring-2 ring-indigo-200'
+                       : 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100'
+                    }
+                 `}
               >
-                 清除加班
+                  <GraduationCap size={20} />
+                  <span>{selectedOvertimeCell.isLesson ? '已安排上課' : '上課 (1300-1700)'}</span>
+              </button>
+
+              <button
+                 onClick={() => {
+                    if (selectedOvertimeCell) {
+                       handleUpdateShiftAttributes(
+                          selectedOvertimeCell.empId, 
+                          selectedOvertimeCell.dateStr, 
+                          selectedOvertimeCell.baseCode, 
+                          0, 
+                          false // Clear both OT and Lesson
+                       );
+                       setSelectedOvertimeCell(null);
+                    }
+                 }}
+                 className="w-full py-2 text-xs text-gray-500 hover:bg-gray-50 rounded border border-gray-200"
+              >
+                 清除加班與上課
               </button>
             </div>
           </>

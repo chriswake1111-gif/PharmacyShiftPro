@@ -114,11 +114,12 @@ export const exportToExcel = (
     let totalOt = 0;
     for (const date of dateRange) {
       const dateKey = format(date, 'yyyy-MM-dd');
-      const { code, ot } = parseShiftCode(schedule[dateKey]?.[emp.id]);
+      const { code, ot, isLesson } = parseShiftCode(schedule[dateKey]?.[emp.id]);
       if (code && shiftDefinitions[code] && code !== BuiltInShifts.ANNUAL && code !== BuiltInShifts.OFF) {
         const def = shiftDefinitions[code];
         totalOt += (def.defaultOvertime || 0);
         totalOt += ot;
+        // Lesson does NOT count as OT per user request
       }
     }
     return totalOt > 0 ? totalOt : '';
@@ -130,12 +131,13 @@ export const exportToExcel = (
     let totalHours = 0;
     for (const date of dateRange) {
       const dateKey = format(date, 'yyyy-MM-dd');
-      const { code, ot } = parseShiftCode(schedule[dateKey]?.[emp.id]);
+      const { code, ot, isLesson } = parseShiftCode(schedule[dateKey]?.[emp.id]);
       if (code && shiftDefinitions[code] && code !== BuiltInShifts.ANNUAL && code !== BuiltInShifts.OFF) {
         const def = shiftDefinitions[code];
         totalHours += def.hours;
         totalHours += (def.defaultOvertime || 0);
         totalHours += ot;
+        // Lesson does NOT count as extra work hours per user request
       }
     }
     return totalHours > 0 ? totalHours : '';
@@ -178,7 +180,7 @@ function getCellText(
   shiftDefinitions: Record<string, ShiftDefinition>
 ): string {
   const rawValue = schedule[dateKey]?.[empId];
-  const { code, ot } = parseShiftCode(rawValue);
+  const { code, ot, isLesson } = parseShiftCode(rawValue);
   
   let cellText = '';
   if (code && shiftDefinitions[code]) {
@@ -193,6 +195,10 @@ function getCellText(
        // Normal Overtime
        if (ot > 0) {
          cellText += `+${ot}`;
+       }
+       // Lesson display
+       if (isLesson) {
+         cellText += `/上`;
        }
     }
   }

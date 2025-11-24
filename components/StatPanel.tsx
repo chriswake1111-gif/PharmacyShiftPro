@@ -27,7 +27,7 @@ export const StatPanel: React.FC<Props> = ({ employees, schedule, dateRange, shi
             const dateStr = format(date, 'yyyy-MM-dd');
             const dailyData = schedule[dateStr] || {};
             const rawValue = dailyData[emp.id];
-            const { code, ot } = parseShiftCode(rawValue);
+            const { code, ot, isLesson } = parseShiftCode(rawValue);
             
             if (code && shiftDefinitions[code]) {
                 const def = shiftDefinitions[code];
@@ -62,6 +62,12 @@ export const StatPanel: React.FC<Props> = ({ employees, schedule, dateRange, shi
                     // Manual Overtime
                     totalWorkHours += ot;
                     totalOt += ot;
+
+                    // Lesson Flag
+                    // Per user request: Lesson does NOT count as overtime hours.
+                    if (isLesson) {
+                        // Do nothing for stats
+                    }
                 }
             }
         });
