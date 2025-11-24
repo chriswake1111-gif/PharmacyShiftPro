@@ -47,11 +47,26 @@ export interface DateRange {
 
 // Helper to parse "CODE:OT:L"
 export const parseShiftCode = (value: string | undefined) => {
-  if (!value) return { code: null, ot: 0, isLesson: false };
+  if (!value || typeof value !== 'string') return { code: null, ot: 0, isLesson: false };
+  
   const parts = value.split(':');
+  const code = parts[0];
+  
+  // Safely parse OT, default to 0 if NaN or missing
+  let ot = 0;
+  if (parts.length > 1) {
+    const parsed = parseInt(parts[1], 10);
+    if (!isNaN(parsed)) {
+      ot = parsed;
+    }
+  }
+
+  // Check for Lesson flag
+  const isLesson = parts.length > 2 ? parts[2] === 'L' : false;
+
   return { 
-    code: parts[0], 
-    ot: parts.length > 1 ? parseInt(parts[1], 10) : 0,
-    isLesson: parts.length > 2 ? parts[2] === 'L' : false
+    code, 
+    ot,
+    isLesson
   };
 };

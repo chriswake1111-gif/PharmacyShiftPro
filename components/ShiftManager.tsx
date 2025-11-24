@@ -56,12 +56,13 @@ export const ShiftManager: React.FC<Props> = ({ shiftDefs, setShiftDefs, isOpen,
       isValid = false;
     }
 
-    // Time validation: Simple check for HH:MM - HH:MM or specific keywords like "休假"
-    const timePattern = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]\s*-\s*([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
-    // Allow standard format OR "休假"
-    if (formData.time && !timePattern.test(formData.time) && formData.time !== '休假') {
-      newErrors.time = '格式需為 09:00 - 17:30';
-      isValid = false;
+    // Relaxed Time Validation: Allows "09:00 - 17:30", "0900-1730", "9:00~17:00", etc.
+    const timePattern = /^([0-1]?[0-9]|2[0-3])[:：]?[0-5][0-9]\s*[-~]\s*([0-1]?[0-9]|2[0-3])[:：]?[0-5][0-9]$/;
+    
+    // We only validate if something is entered and it is not special keyword '休假'
+    if (formData.time && formData.time !== '休假' && !timePattern.test(formData.time)) {
+      // Just a warning, we don't block anymore
+      // newErrors.time = '建議格式: 09:00 - 17:30';
     }
 
     if (formData.hours === undefined || formData.hours < 0) {
