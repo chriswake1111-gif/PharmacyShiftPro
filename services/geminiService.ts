@@ -4,8 +4,28 @@ import { format } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 import { Employee, StoreSchedule, ShiftDefinition } from '../types';
 
-// Check for REACT_APP_ prefix first (standard for React apps), fallback to plain API_KEY
-const apiKey = process.env.REACT_APP_GEMINI_API_KEY || process.env.API_KEY || '';
+// Helper to safely get env vars in any environment without crashing
+const getEnvVar = (key: string): string => {
+  try {
+    // @ts-ignore - Try Vite
+    if (import.meta && import.meta.env) {
+      // @ts-ignore
+      return import.meta.env[key] || import.meta.env[`VITE_${key}`] || import.meta.env[`REACT_APP_${key}`] || '';
+    }
+  } catch (e) {}
+
+  try {
+    // Try Node/CRA
+    if (typeof process !== 'undefined' && process.env) {
+      return process.env[key] || process.env[`REACT_APP_${key}`] || process.env[`VITE_${key}`] || '';
+    }
+  } catch (e) {}
+  
+  return '';
+};
+
+// Get API Key safely
+const apiKey = getEnvVar('GEMINI_API_KEY') || getEnvVar('API_KEY');
 const ai = new GoogleGenAI({ apiKey });
 
 interface GenerateScheduleParams {
@@ -23,7 +43,7 @@ export const generateSmartSchedule = async ({
 }: GenerateScheduleParams): Promise<StoreSchedule> => {
   
   if (!apiKey) {
-    throw new Error("API Key is missing. Please check your environment variables (REACT_APP_GEMINI_API_KEY).");
+    throw new Error("AI 金鑰未設定 (API Key is missing)。請檢查 Vercel 環境變數設定。");
   }
 
   const startDateStr = format(dateRange[0], 'yyyy-MM-dd');

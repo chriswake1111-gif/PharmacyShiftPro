@@ -1,15 +1,38 @@
 
-// IMPORTANT: These values are now loaded from Environment Variables (Vercel)
-// This prevents security alerts from GitHub and protects your configuration.
+// IMPORTANT: These values are loaded from Environment Variables
+// This supports both standard process.env (CRA/Node) and import.meta.env (Vite)
+
+// Helper to safely get env vars in any environment without crashing
+const getEnvVar = (key: string): string => {
+  // 1. Try Vite (import.meta.env)
+  try {
+    // @ts-ignore - import.meta might not be typed in all configs
+    if (import.meta && import.meta.env) {
+      // @ts-ignore
+      const val = import.meta.env[key] || import.meta.env[`VITE_${key}`] || import.meta.env[`REACT_APP_${key}`];
+      if (val) return val;
+    }
+  } catch (e) {}
+
+  // 2. Try Node/CRA (process.env)
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+      const val = process.env[key] || process.env[`REACT_APP_${key}`] || process.env[`VITE_${key}`];
+      if (val) return val;
+    }
+  } catch (e) {}
+
+  return '';
+};
 
 export const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID,
-  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
+  apiKey: getEnvVar('FIREBASE_API_KEY'),
+  authDomain: getEnvVar('FIREBASE_AUTH_DOMAIN'),
+  projectId: getEnvVar('FIREBASE_PROJECT_ID'),
+  storageBucket: getEnvVar('FIREBASE_STORAGE_BUCKET'),
+  messagingSenderId: getEnvVar('FIREBASE_MESSAGING_SENDER_ID'),
+  appId: getEnvVar('FIREBASE_APP_ID'),
+  measurementId: getEnvVar('FIREBASE_MEASUREMENT_ID')
 };
 
 // Check if config is actually set correctly
