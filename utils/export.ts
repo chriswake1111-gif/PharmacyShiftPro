@@ -1,6 +1,7 @@
+
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
-import zhTW from 'date-fns/locale/zh-TW';
+import { zhTW } from 'date-fns/locale';
 import { Employee, StoreSchedule, ShiftDefinition, parseShiftCode, BuiltInShifts } from '../types';
 import { calculatePeriodStats } from './statistics';
 

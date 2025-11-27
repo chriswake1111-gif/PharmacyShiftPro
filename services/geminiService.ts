@@ -1,9 +1,11 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { format } from 'date-fns';
-import zhTW from 'date-fns/locale/zh-TW';
-import { Employee, ShiftCode, StoreSchedule, ShiftDefinition } from '../types';
+import { zhTW } from 'date-fns/locale';
+import { Employee, StoreSchedule, ShiftDefinition } from '../types';
 
-const apiKey = process.env.API_KEY || '';
+// Check for REACT_APP_ prefix first (standard for React apps), fallback to plain API_KEY
+const apiKey = process.env.REACT_APP_GEMINI_API_KEY || process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
 interface GenerateScheduleParams {
@@ -21,7 +23,7 @@ export const generateSmartSchedule = async ({
 }: GenerateScheduleParams): Promise<StoreSchedule> => {
   
   if (!apiKey) {
-    throw new Error("API Key is missing");
+    throw new Error("API Key is missing. Please check your environment variables (REACT_APP_GEMINI_API_KEY).");
   }
 
   const startDateStr = format(dateRange[0], 'yyyy-MM-dd');
