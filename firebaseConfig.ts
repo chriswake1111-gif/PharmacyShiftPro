@@ -1,20 +1,20 @@
 
-// IMPORTANT: Replace the values below with your own Firebase project configuration
-// You can find these in the Firebase Console -> Project Settings -> General -> Your apps
+// IMPORTANT: These values are now loaded from Environment Variables (Vercel)
+// This prevents security alerts from GitHub and protects your configuration.
 
 export const firebaseConfig = {
-  apiKey: "AIzaSyBMkLtf_VKMv3fTGgnrNUhR4IYW_h8I_i4", 
-  authDomain: "pharmacyshiftpro.firebaseapp.com",      
-  projectId: "pharmacyshiftpro",                      
-  storageBucket: "pharmacyshiftpro.firebasestorage.app",       
-  messagingSenderId: "429194484392",      
-  appId: "1:429194484392:web:8d1606be8d408c477dc09d",
-  measurementId: "G-5T2Z0VCHW2"
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
 
 // Check if config is actually set correctly
 export const isFirebaseConfigured = () => {
   if (!firebaseConfig.apiKey) return false;
-  // Basic check to ensure it's not a placeholder
-  return !firebaseConfig.apiKey.includes("YOUR_API_KEY");
+  // Basic check to ensure it has a value (not undefined or empty)
+  return firebaseConfig.apiKey.length > 0;
 };
