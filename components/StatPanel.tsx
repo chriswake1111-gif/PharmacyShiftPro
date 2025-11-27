@@ -1,83 +1,23 @@
 
 import React, { useMemo } from 'react';
-import { Employee, StoreSchedule, ShiftDefinition, parseShiftCode, BuiltInShifts } from '../types';
+import { Employee, StoreSchedule, ShiftDefinition } from '../types';
 import { format } from 'date-fns';
+import { calculatePeriodStats, EmployeeStats } from '../utils/statistics';
 
 interface Props {
   employees: Employee[];
-  schedule: StoreSchedule; // Store's entire schedule: Date -> Emp -> Shift
+  schedule: StoreSchedule; 
   dateRange: Date[];
-  shiftDefinitions: Record<string, ShiftDefinition>; // Added props
+  shiftDefinitions: Record<string, ShiftDefinition>; 
 }
 
 export const StatPanel: React.FC<Props> = ({ employees, schedule, dateRange, shiftDefinitions }) => {
   
-  // Pre-calculate stats for all employees to facilitate row-based rendering
+  // Memoize stats calculation
   const stats = useMemo(() => {
-    const result: Record<string, { ap: number, full: number, annual: number, ot: number, total: number }> = {};
-    
+    const result: Record<string, EmployeeStats> = {};
     employees.forEach(emp => {
-        let apCount = 0;
-        let fullCount = 0;
-        let annualHours = 0;
-        let totalWorkHours = 0;
-        let totalOt = 0;
-
-        dateRange.forEach(date => {
-            const dateStr = format(date, 'yyyy-MM-dd');
-            const dailyData = schedule[dateStr] || {};
-            const rawValue = dailyData[emp.id];
-            const { code, ot, isLesson } = parseShiftCode(rawValue);
-            
-            if (code && shiftDefinitions[code]) {
-                const def = shiftDefinitions[code];
-                
-                // Grouping Logic
-                if (code === BuiltInShifts.A || code === BuiltInShifts.P) {
-                    apCount++;
-                } else if (
-                    code === BuiltInShifts.A_FULL || 
-                    code === BuiltInShifts.P_FULL || 
-                    code === BuiltInShifts.FULL_PLUS_2
-                ) {
-                    fullCount++;
-                }
-
-                // Calculation Logic
-                if (code === BuiltInShifts.ANNUAL) {
-                    // Annual Leave: use OT value as custom hours, or default hours (8)
-                    // Do NOT add to totalWorkHours
-                    const hours = ot > 0 ? ot : def.hours;
-                    annualHours += hours;
-                } else if (code !== BuiltInShifts.OFF) {
-                    // Regular Work Shift
-                    // Base Hours
-                    totalWorkHours += def.hours;
-                    
-                    // Default Overtime
-                    const defaultOt = def.defaultOvertime || 0;
-                    totalWorkHours += defaultOt;
-                    totalOt += defaultOt;
-
-                    // Manual Overtime
-                    totalWorkHours += ot;
-                    totalOt += ot;
-
-                    // Lesson Flag
-                    // Per user request: Lesson does NOT count as overtime hours.
-                    if (isLesson) {
-                        // Do nothing for stats
-                    }
-                }
-            }
-        });
-        result[emp.id] = {
-            ap: apCount,
-            full: fullCount,
-            annual: annualHours,
-            ot: totalOt,
-            total: totalWorkHours
-        };
+        result[emp.id] = calculatePeriodStats(emp.id, schedule, dateRange, shiftDefinitions);
     });
     return result;
   }, [employees, schedule, dateRange, shiftDefinitions]);

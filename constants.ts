@@ -108,6 +108,17 @@ export const DEFAULT_SHIFT_DEFINITIONS: Record<string, ShiftDefinition> = {
     hours: 8, 
     sortOrder: 8
   },
+  [BuiltInShifts.N]: {
+    code: BuiltInShifts.N,
+    label: 'D班',
+    time: '18:00 - 22:00',
+    color: 'bg-cyan-100 text-cyan-800 border-cyan-200',
+    weekendColor: 'bg-cyan-200 text-cyan-900 border-cyan-300',
+    shortLabel: 'D',
+    description: '晚班 4小時',
+    hours: 4,
+    sortOrder: 9
+  }
 };
 
 export const INITIAL_EMPLOYEES: Employee[] = [

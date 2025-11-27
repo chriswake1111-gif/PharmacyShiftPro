@@ -9,7 +9,7 @@ let db: Firestore | null = null;
 // Initialize Firebase safely
 if (isFirebaseConfigured()) {
   try {
-    // Prevent multiple initializations
+    // Prevent multiple initializations to avoid React Hot Refresh issues
     const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
     db = getFirestore(app);
     console.log("Firebase initialized successfully");
@@ -42,11 +42,10 @@ export const saveToCloud = async (syncId: string, data: CloudBackupData): Promis
     });
   } catch (error: any) {
     console.error("Cloud Save Error:", error);
-    // Provide more specific error messages if possible
     if (error.code === 'permission-denied') {
-      throw new Error("權限不足：請檢查 Firebase Firestore 的 Security Rules 是否已設為測試模式 (Test Mode)。");
+      throw new Error("權限不足：請檢查 Firebase Firestore 的 Security Rules 是否已設為測試模式。");
     }
-    throw new Error("上傳失敗，請檢查網路連線或代碼");
+    throw new Error("上傳失敗：" + (error.message || "未知錯誤"));
   }
 };
 
@@ -65,13 +64,13 @@ export const loadFromCloud = async (syncId: string): Promise<CloudBackupData | n
     if (docSnap.exists()) {
       return docSnap.data() as CloudBackupData;
     } else {
-      return null; // Document not found
+      return null;
     }
   } catch (error: any) {
     console.error("Cloud Load Error:", error);
     if (error.code === 'permission-denied') {
       throw new Error("權限不足：請檢查 Firebase Firestore 的 Security Rules。");
     }
-    throw new Error("下載失敗，請檢查代碼或網路連線");
+    throw new Error("下載失敗：" + (error.message || "未知錯誤"));
   }
 };

@@ -9,7 +9,8 @@ export const BuiltInShifts = {
   FULL_PLUS_2: 'FULL_PLUS_2',
   OFF: 'OFF',
   ANNUAL: 'ANNUAL',
-  LESSON: 'LESSON'
+  LESSON: 'LESSON',
+  N: 'N'
 } as const;
 
 export interface ShiftDefinition {
@@ -17,7 +18,7 @@ export interface ShiftDefinition {
   label: string;
   time: string;
   color: string;
-  weekendColor?: string; // Added property for weekend specific styling
+  weekendColor?: string;
   shortLabel: string;
   description?: string;
   hours: number; 
@@ -61,6 +62,7 @@ export const parseShiftCode = (value: string | undefined): ParsedShift => {
   const code = parts[0];
   
   let ot = 0;
+  // Parse OT if present (2nd part)
   if (parts.length > 1) {
     const parsed = parseInt(parts[1], 10);
     if (!isNaN(parsed)) {
@@ -68,6 +70,7 @@ export const parseShiftCode = (value: string | undefined): ParsedShift => {
     }
   }
 
+  // Parse Lesson Flag if present (3rd part, e.g., "A:0:L")
   const isLesson = parts.length > 2 && parts[2] === 'L';
 
   return { 

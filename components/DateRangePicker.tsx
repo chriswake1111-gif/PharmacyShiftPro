@@ -2,10 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   format, 
   addMonths, 
-  subMonths, 
-  startOfMonth, 
   endOfMonth, 
-  startOfWeek, 
   endOfWeek, 
   eachDayOfInterval, 
   isSameMonth, 
@@ -13,10 +10,13 @@ import {
   isWithinInterval, 
   isBefore, 
   isAfter, 
-  parseISO, 
   isValid 
 } from 'date-fns';
-import { zhTW } from 'date-fns/locale';
+import subMonths from 'date-fns/subMonths';
+import startOfMonth from 'date-fns/startOfMonth';
+import startOfWeek from 'date-fns/startOfWeek';
+import parseISO from 'date-fns/parseISO';
+import zhTW from 'date-fns/locale/zh-TW';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, X } from 'lucide-react';
 
 interface Props {
