@@ -4,25 +4,28 @@
 
 // Helper to safely get env vars in any environment without crashing
 const getEnvVar = (key: string): string => {
-  // 1. Try Vite (import.meta.env)
+  let val = '';
+  
+  // 1. Try Vite (import.meta.env) - This is the standard for Vite apps
   try {
-    // @ts-ignore - import.meta might not be typed in all configs
+    // @ts-ignore
     if (import.meta && import.meta.env) {
+      // Prioritize VITE_ prefix as it's the default for Vite
       // @ts-ignore
-      const val = import.meta.env[key] || import.meta.env[`VITE_${key}`] || import.meta.env[`REACT_APP_${key}`];
-      if (val) return val;
+      val = import.meta.env[`VITE_${key}`] || import.meta.env[key] || import.meta.env[`REACT_APP_${key}`];
     }
   } catch (e) {}
 
-  // 2. Try Node/CRA (process.env)
+  if (val) return val;
+
+  // 2. Try Node/CRA (process.env) - This might work if Vercel polyfills process
   try {
     if (typeof process !== 'undefined' && process.env) {
-      const val = process.env[key] || process.env[`REACT_APP_${key}`] || process.env[`VITE_${key}`];
-      if (val) return val;
+      val = process.env[`VITE_${key}`] || process.env[`REACT_APP_${key}`] || process.env[key];
     }
   } catch (e) {}
 
-  return '';
+  return val || '';
 };
 
 export const firebaseConfig = {
@@ -37,7 +40,11 @@ export const firebaseConfig = {
 
 // Check if config is actually set correctly
 export const isFirebaseConfigured = () => {
-  if (!firebaseConfig.apiKey) return false;
-  // Basic check to ensure it has a value (not undefined or empty)
-  return firebaseConfig.apiKey.length > 0;
+  const hasKey = firebaseConfig.apiKey && firebaseConfig.apiKey.length > 0;
+  if (!hasKey) {
+    console.warn("Firebase Configuration Missing: API Key is empty.");
+    console.log("Debug Info - Env Vars Check:");
+    console.log("VITE_FIREBASE_API_KEY present?", !!getEnvVar('FIREBASE_API_KEY'));
+  }
+  return hasKey;
 };
