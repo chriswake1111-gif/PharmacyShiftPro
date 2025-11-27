@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { format, eachDayOfInterval, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
@@ -20,7 +19,8 @@ import {
   MonitorDown,
   Maximize2,
   Minimize2,
-  GraduationCap
+  GraduationCap,
+  Cloud // Import Cloud icon
 } from 'lucide-react';
 
 import { ShiftCode, Employee, StoreSchedule, ShiftDefinition, parseShiftCode, BuiltInShifts } from './types';
@@ -32,6 +32,8 @@ import { ShiftManager } from './components/ShiftManager';
 import { StatPanel } from './components/StatPanel';
 import { DateRangePicker } from './components/DateRangePicker';
 import { HelpModal } from './components/HelpModal';
+import { CloudSyncModal } from './components/CloudSyncModal'; // Import Cloud Modal
+import { CloudBackupData } from './services/cloudService'; // Import Types
 
 // Structure: Record<StoreName, StoreSchedule>
 // StoreSchedule is Record<DateString, Record<EmpId, ShiftCode>>
@@ -209,6 +211,7 @@ const App: React.FC = () => {
   const [isEmpManagerOpen, setIsEmpManagerOpen] = useState(false);
   const [isShiftManagerOpen, setIsShiftManagerOpen] = useState(false);
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
+  const [isCloudSyncOpen, setIsCloudSyncOpen] = useState(false); // Cloud Modal State
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
@@ -343,6 +346,31 @@ const App: React.FC = () => {
       setSaveStatus('saved');
       showToast('資料已成功儲存');
     }, 500);
+  };
+
+  // Prepare data for Cloud Save
+  const getCloudData = (): CloudBackupData => {
+     // Ensure we save the latest in-memory state
+     return {
+        employeesMap,
+        shiftDefs,
+        data: allData,
+        lastUpdated: new Date().toISOString(),
+        version: 1
+     };
+  };
+
+  // Handle Cloud Load
+  const handleCloudDataLoaded = (cloudData: CloudBackupData) => {
+      setEmployeesMap(cloudData.employeesMap);
+      setShiftDefs(cloudData.shiftDefs);
+      setSavedData(cloudData.data);
+      setAllData(cloudData.data);
+      
+      // Persist to local storage immediately
+      localStorage.setItem('pharmacy_employees_v2', JSON.stringify(cloudData.employeesMap));
+      localStorage.setItem('pharmacy_shift_defs', JSON.stringify(cloudData.shiftDefs));
+      localStorage.setItem('pharmacy_data_v2', JSON.stringify(cloudData.data));
   };
 
   const handleBackupData = () => {
@@ -701,17 +729,26 @@ const App: React.FC = () => {
                 <span className="hidden lg:inline">匯出</span>
               </button>
 
+               {/* New Cloud Sync Button */}
+               <button
+                onClick={() => setIsCloudSyncOpen(true)}
+                className="p-1.5 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded transition-colors border border-transparent hover:border-brand-200"
+                title="雲端同步"
+              >
+                 <Cloud size={18} />
+              </button>
+
               <button
                 onClick={handleBackupData}
                 className="p-1.5 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded transition-colors border border-transparent hover:border-brand-200"
-                title="備份"
+                title="備份 (JSON)"
               >
                  <FileJson size={18} />
               </button>
               <button
                 onClick={() => fileInputRef.current?.click()}
                 className="p-1.5 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded transition-colors border border-transparent hover:border-brand-200"
-                title="還原"
+                title="還原 (JSON)"
               >
                  <Upload size={18} />
               </button>
@@ -1068,7 +1105,7 @@ const App: React.FC = () => {
              <div 
                className="fixed inset-0 z-[130] cursor-default bg-transparent" 
                onClick={() => setSelectedAnnualCell(null)}
-             />
+            />
              <div 
                className="fixed bg-white shadow-2xl rounded-xl border border-gray-200 p-4 w-[300px] z-[140] animate-fade-in-up"
                style={{
@@ -1150,6 +1187,14 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Cloud Sync Modal */}
+      <CloudSyncModal 
+         isOpen={isCloudSyncOpen}
+         onClose={() => setIsCloudSyncOpen(false)}
+         getDataToSave={getCloudData}
+         onDataLoaded={handleCloudDataLoaded}
+      />
 
       <EmployeeManager 
         employees={employees} 
