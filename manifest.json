@@ -1,7 +1,8 @@
+
 {
   "name": "PharmacyShiftPro 藥局排班系統",
   "short_name": "藥局排班",
-  "description": "專業藥局排班系統，支援AI排班與Excel匯出",
+  "description": "專業藥局排班系統，支援雲端同步與Excel匯出",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

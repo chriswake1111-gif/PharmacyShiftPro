@@ -6,7 +6,6 @@ import {
   Users, 
   Download, 
   Calendar as CalendarIcon, 
-  Sparkles, 
   Store,
   XCircle,
   Save as SaveIcon, 
@@ -26,7 +25,6 @@ import {
 
 import { ShiftCode, Employee, StoreSchedule, ShiftDefinition, parseShiftCode, BuiltInShifts } from './types';
 import { DEFAULT_SHIFT_DEFINITIONS, INITIAL_EMPLOYEES, STORES, DEPARTMENTS } from './constants';
-import { generateSmartSchedule } from './services/geminiService';
 import { exportToExcel } from './utils/export';
 import { EmployeeManager } from './components/EmployeeManager';
 import { ShiftManager } from './components/ShiftManager';
@@ -183,7 +181,6 @@ const App: React.FC = () => {
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const [isCloudSyncOpen, setIsCloudSyncOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -459,34 +456,6 @@ const App: React.FC = () => {
     showToast('已回復區間內的預設班別');
   };
 
-  const handleAISchedule = async () => {
-    if (displayDays.length === 0) return;
-    setIsGenerating(true);
-    try {
-      const newSchedule = await generateSmartSchedule({
-        employees: sortedEmployees,
-        dateRange,
-        existingSchedule: storeSchedule,
-        shiftDefinitions: shiftDefs
-      });
-      setAllData(prev => {
-        const currentStoreData = { ...(prev[selectedStore] || {}) };
-        Object.entries(newSchedule).forEach(([dateStr, assignments]) => {
-          if (!currentStoreData[dateStr]) currentStoreData[dateStr] = {};
-          Object.entries(assignments).forEach(([empId, code]) => {
-            currentStoreData[dateStr][empId] = code;
-          });
-        });
-        return { ...prev, [selectedStore]: currentStoreData };
-      });
-      showToast('AI 智能排班完成');
-    } catch (error) {
-      alert('AI 排班失敗，請稍後再試。');
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
   // Render
   return (
     <div className="min-h-screen flex flex-col font-sans bg-gray-50 text-slate-900">
@@ -542,11 +511,6 @@ const App: React.FC = () => {
               <button onClick={handleManualSave} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all shadow-sm ${saveStatus === 'saved' ? 'bg-green-100 text-green-700 border border-green-200' : hasUnsavedChanges ? 'bg-yellow-50 text-yellow-700 border border-yellow-300 ring-2 ring-yellow-200 animate-pulse-slow' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'}`}>
                 {saveStatus === 'saved' ? <CheckCircle size={14} /> : <SaveIcon size={14} />}
                 <span className="hidden sm:inline">{saveStatus === 'saving' ? '...' : saveStatus === 'saved' ? '已儲存' : '儲存'}</span>
-              </button>
-
-              <button onClick={handleAISchedule} disabled={isGenerating || displayDays.length === 0} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-70 disabled:cursor-wait transition-all shadow-sm">
-                <Sparkles size={14} className={isGenerating ? "animate-spin" : ""} />
-                <span className="hidden sm:inline">{isGenerating ? 'Thinking' : 'AI'}</span>
               </button>
 
               <div className="h-6 w-px bg-gray-300 mx-1"></div>
