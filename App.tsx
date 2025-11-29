@@ -1,6 +1,5 @@
-
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { format, eachDayOfInterval, endOfMonth, startOfMonth, parseISO } from 'date-fns';
+import { format, eachDayOfInterval, endOfMonth, startOfMonth, parseISO, isSameDay } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 import { 
   Users, 
@@ -20,7 +19,11 @@ import {
   Maximize2,
   Minimize2,
   GraduationCap,
-  Cloud
+  Cloud,
+  Eye,
+  EyeOff,
+  Filter,
+  Trash2
 } from 'lucide-react';
 
 import { ShiftCode, Employee, StoreSchedule, ShiftDefinition, parseShiftCode, BuiltInShifts } from './types';
@@ -90,25 +93,25 @@ const ShiftCell = React.memo(({
   const colorClass = (isWeekend && shiftDef?.weekendColor) ? shiftDef.weekendColor : (shiftDef?.color || '');
 
   return (
-    <td className={`relative border-b border-r border-gray-100 p-0.5 text-center h-10 ${isWeekend ? 'bg-orange-50/10' : ''}`}>
+    <td className={`relative border-b border-r border-gray-100 p-0 sm:p-0.5 text-center h-10 ${isWeekend ? 'bg-orange-50/10' : ''}`}>
       <button
         onClick={(e) => onClick(e, empId, dateStr)}
         onDoubleClick={(e) => rawValue && onDoubleClick(e, empId, dateStr, rawValue)}
-        className={`w-full h-full rounded flex items-center justify-center transition-all text-xs font-bold shadow-sm select-none relative
+        className={`w-full h-full rounded-none sm:rounded flex items-center justify-center transition-all text-xs font-bold shadow-sm select-none relative
           ${shiftDef ? `${colorClass} hover:brightness-95` : 'text-transparent hover:bg-gray-100 hover:text-gray-300'}
-          ${isDirty ? 'ring-2 ring-yellow-400 border-transparent' : ''}
+          ${isDirty ? 'ring-2 ring-yellow-400 border-transparent z-10' : ''}
         `}
       >
         {shiftDef ? (
-          <div className="flex items-center gap-0.5">
-             <span>{shiftDef.shortLabel}</span>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-0 sm:gap-0.5 leading-none">
+             <span className="text-[10px] sm:text-xs">{shiftDef.shortLabel}</span>
              {code === BuiltInShifts.ANNUAL ? (
-                (ot > 0 && ot !== shiftDef.hours) && <span className="text-[9px] bg-white/50 px-0.5 rounded text-gray-800">({ot})</span>
+                (ot > 0 && ot !== shiftDef.hours) && <span className="text-[9px] bg-white/50 px-0.5 rounded text-gray-800 scale-90 sm:scale-100">({ot})</span>
              ) : (
-               <>
-                 {ot > 0 && <span className="text-[9px] bg-white/50 px-0.5 rounded text-gray-800">+{ot}</span>}
-                 {isLesson && <span className="text-[9px] bg-indigo-100 text-indigo-700 px-0.5 rounded border border-indigo-200">/上</span>}
-               </>
+               <div className="flex gap-0.5">
+                 {ot > 0 && <span className="text-[8px] sm:text-[9px] bg-white/50 px-0.5 rounded text-gray-800 scale-90 sm:scale-100">+{ot}</span>}
+                 {isLesson && <span className="text-[8px] sm:text-[9px] bg-indigo-100 text-indigo-700 px-0.5 rounded border border-indigo-200 scale-90 sm:scale-100">/上</span>}
+               </div>
              )}
           </div>
         ) : '+'}
@@ -126,10 +129,19 @@ const ShiftCell = React.memo(({
 
 const App: React.FC = () => {
   // State Initialization
-  const [startDate, setStartDate] = useState<string>(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
-  const [endDate, setEndDate] = useState<string>(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
-  const [selectedStore, setSelectedStore] = useState<string>(STORES[0]);
+  const [startDate, setStartDate] = useState<string>(() => {
+    return localStorage.getItem('pharmacy_startDate') || format(startOfMonth(new Date()), 'yyyy-MM-dd');
+  });
+  const [endDate, setEndDate] = useState<string>(() => {
+    return localStorage.getItem('pharmacy_endDate') || format(endOfMonth(new Date()), 'yyyy-MM-dd');
+  });
+  const [selectedStore, setSelectedStore] = useState<string>(() => {
+    return localStorage.getItem('pharmacy_selectedStore') || STORES[0];
+  });
   
+  // View Settings
+  const [visibleSections, setVisibleSections] = useState({ retail: true, dispensing: true });
+
   // Data State
   const [employeesMap, setEmployeesMap] = useState<Record<string, Employee[]>>(() => {
     try {
@@ -199,7 +211,14 @@ const App: React.FC = () => {
   const storeSchedule = useMemo(() => allData[selectedStore] || {}, [allData, selectedStore]);
   const baselineSchedule = useMemo(() => savedData[selectedStore] || {}, [savedData, selectedStore]);
   
-  const sortedEmployees = useMemo(() => {
+  const visibleEmployees = useMemo(() => {
+    return [
+      ...(visibleSections.retail ? employees.filter(e => e.department === 'retail') : []),
+      ...(visibleSections.dispensing ? employees.filter(e => e.department === 'dispensing') : [])
+    ];
+  }, [employees, visibleSections]);
+
+  const allSortedEmployees = useMemo(() => {
     return [
       ...employees.filter(e => e.department === 'retail'),
       ...employees.filter(e => e.department === 'dispensing')
@@ -210,7 +229,8 @@ const App: React.FC = () => {
     return (Object.values(shiftDefs) as ShiftDefinition[]).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   }, [shiftDefs]);
 
-  const retailCount = employees.filter(e => e.department === 'retail').length;
+  const retailCount = visibleSections.retail ? employees.filter(e => e.department === 'retail').length : 0;
+  const dispensingCount = visibleSections.dispensing ? employees.filter(e => e.department === 'dispensing').length : 0;
 
   const dateRange = useMemo(() => {
     try {
@@ -221,12 +241,14 @@ const App: React.FC = () => {
   }, [startDate, endDate]);
 
   const displayDays = useMemo(() => {
+    const today = new Date();
     return dateRange.map(date => ({
       dateObj: date,
       dateStr: format(date, 'yyyy-MM-dd'),
       dayNum: format(date, 'd'),
       weekday: format(date, 'EE', { locale: zhTW }),
-      isWeekend: date.getDay() === 0 || date.getDay() === 6
+      isWeekend: date.getDay() === 0 || date.getDay() === 6,
+      isToday: isSameDay(date, today)
     }));
   }, [dateRange]);
 
@@ -236,6 +258,11 @@ const App: React.FC = () => {
   useEffect(() => localStorage.setItem('pharmacy_employees_v2', JSON.stringify(employeesMap)), [employeesMap]);
   useEffect(() => localStorage.setItem('pharmacy_shift_defs', JSON.stringify(shiftDefs)), [shiftDefs]);
   
+  // Persist view settings
+  useEffect(() => localStorage.setItem('pharmacy_startDate', startDate), [startDate]);
+  useEffect(() => localStorage.setItem('pharmacy_endDate', endDate), [endDate]);
+  useEffect(() => localStorage.setItem('pharmacy_selectedStore', selectedStore), [selectedStore]);
+
   useEffect(() => {
     if (saveStatus === 'saved') {
       const timer = setTimeout(() => setSaveStatus('idle'), 2000);
@@ -400,6 +427,22 @@ const App: React.FC = () => {
     setSelectedCell(null);
   }, [savedData, selectedStore]);
 
+  const handleDeleteShift = useCallback((empId: string, dateStr: string) => {
+    setAllData(prev => {
+      const currentStoreData = prev[selectedStore] || {};
+      const dayData = { ...(currentStoreData[dateStr] || {}) };
+      delete dayData[empId]; // Effectively remove the shift
+      return {
+        ...prev,
+        [selectedStore]: {
+          ...currentStoreData,
+          [dateStr]: dayData
+        }
+      };
+    });
+    setSelectedCell(null);
+  }, [selectedStore]);
+
   const onCellClick = useCallback((e: React.MouseEvent, empId: string, dateStr: string) => {
     e.preventDefault();
     const position = calculatePosition(e);
@@ -454,6 +497,10 @@ const App: React.FC = () => {
     });
     setIsClearConfirmOpen(false);
     showToast('已回復區間內的預設班別');
+  };
+
+  const toggleSection = (section: 'retail' | 'dispensing') => {
+    setVisibleSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
   // Render
@@ -515,7 +562,7 @@ const App: React.FC = () => {
 
               <div className="h-6 w-px bg-gray-300 mx-1"></div>
 
-               <button onClick={() => displayDays.length > 0 && exportToExcel(selectedStore, sortedEmployees, storeSchedule, dateRange, shiftDefs)} disabled={displayDays.length === 0} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors shadow-sm disabled:opacity-50" title="匯出 Excel">
+               <button onClick={() => displayDays.length > 0 && exportToExcel(selectedStore, allSortedEmployees, storeSchedule, dateRange, shiftDefs)} disabled={displayDays.length === 0} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors shadow-sm disabled:opacity-50" title="匯出 Excel">
                 <Download size={14} /><span className="hidden lg:inline">匯出</span>
               </button>
 
@@ -535,9 +582,29 @@ const App: React.FC = () => {
           <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-4 gap-4">
             <div className="flex items-center gap-4 flex-wrap">
                <DateRangePicker startDate={startDate} endDate={endDate} onChange={(s, e) => { setStartDate(s); setEndDate(e); }} />
-               {displayDays.length > 0 && <span className="text-xs text-gray-400 font-medium px-2 border-l border-gray-200 hidden sm:inline">共 {displayDays.length} 天</span>}
+               
+               {/* Department Toggles for Mobile/Small Screens */}
+               <div className="flex items-center bg-white rounded-lg border border-gray-200 p-0.5 shadow-sm">
+                 <button 
+                   onClick={() => toggleSection('retail')}
+                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${visibleSections.retail ? 'bg-green-100 text-green-700 shadow-sm' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'}`}
+                   title={visibleSections.retail ? "隱藏門市部" : "顯示門市部"}
+                 >
+                   {visibleSections.retail ? <Eye size={14} /> : <EyeOff size={14} />}
+                   門市
+                 </button>
+                 <div className="w-px h-5 bg-gray-200 mx-1"></div>
+                 <button 
+                   onClick={() => toggleSection('dispensing')}
+                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${visibleSections.dispensing ? 'bg-blue-100 text-blue-700 shadow-sm' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'}`}
+                   title={visibleSections.dispensing ? "隱藏調劑部" : "顯示調劑部"}
+                 >
+                   {visibleSections.dispensing ? <Eye size={14} /> : <EyeOff size={14} />}
+                   調劑
+                 </button>
+               </div>
               
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="hidden sm:flex flex-wrap items-center gap-2">
                  {sortedShifts.map(def => (
                    <div key={def.code} className="flex items-center gap-1.5 px-2 py-0.5 bg-white border border-gray-200 rounded-full shadow-sm cursor-help" title={`${def.label}: ${def.time} (${def.hours}h)`}>
                      <div className={`w-2.5 h-2.5 rounded-full ${def.color.split(' ')[0].replace('bg-', 'bg-')}`}></div>
@@ -573,27 +640,27 @@ const App: React.FC = () => {
               <table className="border-collapse w-full">
                 <thead className="sticky top-0 z-30 bg-gray-50 text-gray-700 shadow-sm">
                   <tr>
-                    <th className="sticky left-0 z-40 bg-gray-50 border-b border-r border-gray-200 min-w-[80px] p-1 text-center font-bold text-xs text-gray-500">日期</th>
-                    {retailCount > 0 && <th colSpan={retailCount} className="border-b border-r border-gray-200 bg-green-50 text-green-700 py-1 text-[10px] font-bold tracking-wider uppercase text-center">{DEPARTMENTS.retail}</th>}
-                    {sortedEmployees.length - retailCount > 0 && <th colSpan={sortedEmployees.length - retailCount} className="border-b border-r border-gray-200 bg-blue-50 text-blue-700 py-1 text-[10px] font-bold tracking-wider uppercase text-center">{DEPARTMENTS.dispensing}</th>}
+                    <th className="sticky left-0 z-40 bg-gray-50 border-b border-r border-gray-200 w-10 md:w-14 min-w-[40px] p-1 text-center font-bold text-xs text-gray-500">日期</th>
+                    {retailCount > 0 && <th colSpan={retailCount} className="border-b border-r border-gray-200 bg-green-50 text-green-700 py-1 text-[10px] font-bold tracking-wider uppercase text-center cursor-pointer hover:bg-green-100" onClick={() => toggleSection('retail')} title="點擊切換顯示">{DEPARTMENTS.retail}</th>}
+                    {dispensingCount > 0 && <th colSpan={dispensingCount} className="border-b border-r border-gray-200 bg-blue-50 text-blue-700 py-1 text-[10px] font-bold tracking-wider uppercase text-center cursor-pointer hover:bg-blue-100" onClick={() => toggleSection('dispensing')} title="點擊切換顯示">{DEPARTMENTS.dispensing}</th>}
                   </tr>
                   <tr>
-                    <th className="sticky left-0 z-40 bg-gray-50 border-b border-r border-gray-200 h-8 w-20"></th>
-                     {sortedEmployees.map(emp => (
-                      <th key={emp.id} className="min-w-[80px] border-b border-r border-gray-100 px-1 py-1 text-center bg-gray-50 font-bold text-gray-700 text-xs whitespace-nowrap">{emp.name}</th>
+                    <th className="sticky left-0 z-40 bg-gray-50 border-b border-r border-gray-200 h-8"></th>
+                     {visibleEmployees.map(emp => (
+                      <th key={emp.id} className="min-w-[60px] sm:min-w-[80px] border-b border-r border-gray-100 px-1 py-1 text-center bg-gray-50 font-bold text-gray-700 text-xs whitespace-nowrap overflow-hidden text-ellipsis">{emp.name}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="bg-white">
                   {displayDays.map((dayInfo) => (
-                    <tr key={dayInfo.dateStr} className="hover:bg-gray-50 transition-colors">
-                      <td className={`sticky left-0 z-20 border-r border-b border-gray-100 p-1 text-center font-medium text-xs ${dayInfo.isWeekend ? 'bg-orange-50 text-orange-800' : 'bg-white text-gray-500'}`}>
-                        <div className="flex flex-row items-center justify-between px-2">
-                          <span className="text-base font-bold leading-none">{dayInfo.dayNum}</span>
-                          <span className="text-[10px] font-bold uppercase">{dayInfo.weekday}</span>
+                    <tr key={dayInfo.dateStr} className={`hover:bg-gray-50 transition-colors ${dayInfo.isToday ? 'bg-yellow-50/30' : ''}`}>
+                      <td className={`sticky left-0 z-20 border-r border-b border-gray-100 p-0.5 text-center font-medium ${dayInfo.isWeekend ? 'bg-orange-50 text-orange-800' : 'bg-white text-gray-500'} ${dayInfo.isToday ? '!bg-yellow-100 text-yellow-900 border-yellow-200' : ''}`}>
+                        <div className="flex flex-col items-center justify-center leading-none py-0.5 sm:py-1">
+                          <span className="text-xs sm:text-sm font-bold">{dayInfo.dayNum}</span>
+                          <span className="text-[8px] sm:text-[9px] font-medium opacity-80 mt-0.5">{dayInfo.weekday}</span>
                         </div>
                       </td>
-                      {sortedEmployees.map((emp) => (
+                      {visibleEmployees.map((emp) => (
                         <ShiftCell
                           key={emp.id}
                           empId={emp.id}
@@ -631,6 +698,9 @@ const App: React.FC = () => {
                 ))}
                 <button onClick={() => { if (selectedCell) handleRevertCell(selectedCell.empId, selectedCell.dateStr); }} className="text-sm px-2 py-3 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200 transition-all font-bold flex items-center justify-center gap-1 col-span-1" title="回復為預設值">
                   <RotateCcw size={16} /> <span className="text-xs">回復預設</span>
+                </button>
+                <button onClick={() => { if (selectedCell) handleDeleteShift(selectedCell.empId, selectedCell.dateStr); }} className="text-sm px-2 py-3 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 transition-all font-bold flex items-center justify-center gap-1 col-span-1" title="清除排班">
+                  <Trash2 size={16} /> <span className="text-xs">清除</span>
                 </button>
               </div>
             </div>
@@ -679,7 +749,7 @@ const App: React.FC = () => {
            </>
         )}
 
-        {displayDays.length > 0 && !isMaximized && <StatPanel employees={sortedEmployees} schedule={storeSchedule} dateRange={dateRange} shiftDefinitions={shiftDefs} />}
+        {displayDays.length > 0 && !isMaximized && <StatPanel employees={allSortedEmployees} schedule={storeSchedule} dateRange={dateRange} shiftDefinitions={shiftDefs} />}
       </main>
       
       {isClearConfirmOpen && (
